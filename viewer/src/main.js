@@ -196,9 +196,11 @@ function onXrButton(hand, b) {
 }
 
 // --- loop ---------------------------------------------------------------------
-const clock = new THREE.Clock();
-renderer.setAnimationLoop(() => {
-  const dt = Math.min(clock.getDelta(), 0.1);
+const timer = new THREE.Timer();
+timer.connect(document);
+renderer.setAnimationLoop((timestamp) => {
+  timer.update(timestamp);
+  const dt = Math.min(timer.getDelta(), 0.1);
   if (renderer.xr.isPresenting) {
     xr.updateControllers(camera);
     pollXrButtons();

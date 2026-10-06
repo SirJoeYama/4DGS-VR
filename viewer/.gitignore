@@ -1,3 +1,4 @@
 node_modules/
 dist/
-public/scenes/
+public/scenes/*
+!public/scenes/jumpingjacks.4dgsv

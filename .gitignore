@@ -11,4 +11,5 @@ __pycache__/
 # Viewer
 viewer/node_modules/
 viewer/dist/
-viewer/public/scenes/
+viewer/public/scenes/*
+!viewer/public/scenes/jumpingjacks.4dgsv
