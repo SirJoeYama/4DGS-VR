@@ -13,3 +13,8 @@ viewer/node_modules/
 viewer/dist/
 viewer/public/scenes/*
 !viewer/public/scenes/jumpingjacks.4dgsv
+!viewer/public/scenes/dancing_robot.4dgsv
+
+# L4GM weights / outputs
+L4GM/pretrained/
+L4GM/results/

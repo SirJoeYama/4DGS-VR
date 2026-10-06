@@ -2,3 +2,4 @@ node_modules/
 dist/
 public/scenes/*
 !public/scenes/jumpingjacks.4dgsv
+!public/scenes/dancing_robot.4dgsv

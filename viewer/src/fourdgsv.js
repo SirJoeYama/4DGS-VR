@@ -33,9 +33,13 @@ export function parseHeader(buffer) {
 export async function decodeFrames(buffer, maxSplats, onProgress) {
   const { header, dataOffset } = parseHeader(buffer);
   const n = header.numSplats;
-  const rgba = new Uint32Array(buffer.slice(dataOffset, dataOffset + n * 4));
-  const frameBytes = n * 16;
-  const base = dataOffset + n * 4;
+  // v1: one shared RGBA block, then pos/scale/quat per frame (16 B/splat).
+  // v2: RGBA stored per frame after the quats (20 B/splat), for models that predict
+  //     every frame independently (L4GM).
+  const perFrameRgba = header.version >= 2;
+  const sharedRgba = perFrameRgba ? null : new Uint32Array(buffer.slice(dataOffset, dataOffset + n * 4));
+  const frameBytes = n * (perFrameRgba ? 20 : 16);
+  const base = dataOffset + (perFrameRgba ? 0 : n * 4);
   const q = new THREE.Quaternion();
   const frames = [];
 
@@ -44,6 +48,7 @@ export async function decodeFrames(buffer, maxSplats, onProgress) {
     const pos = new Uint16Array(buffer, off, n * 3);
     const scl = new Uint16Array(buffer, off + n * 6, n * 3);
     const quat = new Int8Array(buffer, off + n * 12, n * 4);
+    const rgba = sharedRgba ?? new Uint32Array(buffer.slice(off + n * 16, off + n * 20));
     const out = new Uint32Array(maxSplats * 4);
     for (let i = 0; i < n; i++) {
       const i3 = i * 3, i4 = i * 4;

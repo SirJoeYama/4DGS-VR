@@ -87,7 +87,8 @@ async function loadBuffer(buffer, name) {
 }
 
 function placeScene(header) {
-  holder.rotation.set(header.upAxis === "z" ? -Math.PI / 2 : 0, 0, 0);
+  const UP_ROTATION_X = { z: -Math.PI / 2, "-y": Math.PI, y: 0 };
+  holder.rotation.set(UP_ROTATION_X[header.upAxis] ?? 0, 0, 0);
   holder.position.set(0, 0, 0);
   holder.scale.setScalar(1);
   holder.updateMatrixWorld(true);
