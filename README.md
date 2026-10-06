@@ -2,6 +2,8 @@
 
 Play [4DGaussians](https://github.com/hustvl/4DGaussians) dynamic scenes in VR (Quest browser / any WebXR headset).
 
+**Live demo:** https://sirjoeyama.github.io/4DGS-VR/ (open it in the Quest browser and press Enter VR). Every push to `main` rebuilds `viewer/` and deploys it to GitHub Pages; the demo scene is the committed `viewer/public/scenes/jumpingjacks.4dgsv` (other scenes stay git-ignored).
+
 - `4DGaussians/`: vendored upstream repo at commit [`843d5ac`](https://github.com/hustvl/4DGaussians/tree/843d5ac636c37e4b611242287754f3d4ed150144) (see its `LICENSE.md`: non-commercial research use) plus:
   - `compat/`: drop-in shims so nothing needs compiling on Windows:
     `diff_gaussian_rasterization` (backed by gsplat 1.5.3, keeps the Inria API incl. densification
