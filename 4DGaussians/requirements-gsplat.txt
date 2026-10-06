@@ -1,0 +1,15 @@
+torch==2.4.1+cu124
+torchvision==0.19.1+cu124
+https://github.com/nerfstudio-project/gsplat/releases/download/v1.5.3/gsplat-1.5.3%2Bpt24cu124-cp310-cp310-win_amd64.whl
+numpy<2
+matplotlib
+lpips
+plyfile
+pytorch_msssim
+open3d
+imageio[ffmpeg]
+opencv-python
+scipy
+scikit-learn
+tqdm
+easydict

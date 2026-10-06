@@ -1,0 +1,21 @@
+{
+  "name": "4dgs-vr-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WebXR player for baked 4D Gaussian Splatting sequences",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "dev:quest": "vite --mode quest"
+  },
+  "dependencies": {
+    "@sparkjsdev/spark": "2.3.1",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "vite": "^8.3.2"
+  }
+}

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>4DGS VR Player</title>
+  <style>
+    :root { color-scheme: dark; font: 14px/1.4 system-ui, sans-serif; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #101014; color: #e8e8ee; }
+    canvas { display: block; }
+    #panel {
+      position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;
+      max-width: calc(100vw - 32px); box-sizing: border-box;
+      padding: 8px 12px; border-radius: 10px; background: rgba(20, 20, 28, 0.85);
+    }
+    #panel:not([data-loaded]) .needs-seq { opacity: 0.4; pointer-events: none; }
+    #timeline { width: min(40vw, 360px); }
+    button, select, label.file {
+      font: inherit; color: inherit; background: #2a2a38; border: 1px solid #3a3a4c;
+      border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    }
+    label.file input { display: none; }
+    #frame { font-variant-numeric: tabular-nums; min-width: 6ch; text-align: right; }
+    #status {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+      max-width: calc(100vw - 32px); box-sizing: border-box;
+      padding: 8px 12px; border-radius: 8px; background: rgba(20, 20, 28, 0.85);
+    }
+    #help { position: fixed; top: 16px; left: 16px; opacity: 0.6; font-size: 12px; }
+    @media (max-width: 600px) { #help { display: none; } }
+  </style>
+</head>
+<body>
+  <div id="status">Loading…</div>
+  <div id="help">Drag to orbit · Space play/pause · Drop a .4dgsv file<br />
+    VR: thumbsticks move/turn · A/X play/pause · B restart · Y cycle size</div>
+  <div id="panel">
+    <button id="play" class="needs-seq">Pause</button>
+    <input id="timeline" class="needs-seq" type="range" min="0" max="0" value="0" />
+    <span id="frame">–</span>
+    <select id="speed" title="Playback speed">
+      <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
+      <option value="1" selected>1×</option><option value="2">2×</option>
+    </select>
+    <select id="size" title="Scene size">
+      <option value="0.25">¼ size</option><option value="0.5">½ size</option>
+      <option value="1" selected>Life size</option><option value="2">2× size</option>
+    </select>
+    <label class="file">Open…<input id="file" type="file" accept=".4dgsv" /></label>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
