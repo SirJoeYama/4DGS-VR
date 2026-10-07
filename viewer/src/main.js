@@ -2,25 +2,33 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { PackedSplats, SparkRenderer, SparkXr, SplatMesh, utils } from "@sparkjsdev/spark";
 import { decodeFrames, parseHeader } from "./fourdgsv.js";
+import { TextPanel, drawRows } from "./xrpanel.js";
 
 const DEFAULT_URL = "scenes/jumpingjacks.4dgsv";
 const TARGET_SIZE = 1.8; // metres: largest extent of the scene once placed
 const PLACE_DISTANCE = 1.5; // metres in front of the starting position
+const SPEEDS = [0.1, 0.25, 0.5, 1, 1.5, 2, 3];
+const SIZES = [0.25, 0.5, 1, 2];
+const SIZE_LABELS = { 0.25: "¼ size", 0.5: "½ size", 1: "Life size", 2: "2× size" };
 
 const $ = (id) => document.getElementById(id);
 const ui = {
   status: $("status"), play: $("play"), timeline: $("timeline"), frame: $("frame"),
-  speed: $("speed"), size: $("size"), file: $("file"), panel: $("panel"),
+  speed: $("speed"), size: $("size"), file: $("file"), panel: $("panel"), help: $("help"),
+  enterVr: $("enter-vr"), enterAr: $("enter-ar"),
 };
+for (const s of SPEEDS) ui.speed.add(new Option(`${s}×`, String(s), s === 1, s === 1));
+for (const s of SIZES) ui.size.add(new Option(SIZE_LABELS[s], String(s), s === 1, s === 1));
 
 // --- three / Spark setup ---------------------------------------------------
-const renderer = new THREE.WebGLRenderer({ antialias: false });
+const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
+const BACKGROUND = new THREE.Color(0x101014);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x101014);
+scene.background = BACKGROUND;
 const spark = new SparkRenderer({ renderer });
 scene.add(spark);
 
@@ -34,21 +42,72 @@ const orbit = new OrbitControls(camera, renderer.domElement);
 orbit.target.set(0, 1.0, -PLACE_DISTANCE);
 orbit.update();
 
-// Floor grid so the scene has a sense of scale in the headset.
+// Floor grid so the scene has a sense of scale in the headset (hidden in AR).
 const grid = new THREE.GridHelper(10, 20, 0x444455, 0x26262e);
 scene.add(grid);
 
+// WebXR: sessions are started by our own Enter VR / Enter AR buttons; SparkXr is used only
+// for thumbstick locomotion (left stick move, right stick turn, triggers/grips up-down/speed).
+renderer.xr.enabled = true;
+renderer.xr.setReferenceSpaceType("local-floor");
+renderer.xr.setFoveation(0.5);
+renderer.xr.setFramebufferScaleFactor(1.0);
+// (It re-applies these renderer.xr settings when it initializes, so pass the same values.)
 const xr = new SparkXr({
-  renderer,
-  mode: "vr",
-  referenceSpaceType: "local-floor",
-  frameBufferScaleFactor: 1.0,
-  fixedFoveation: 0.5,
-  controllers: {},
-  onReady: (ok) => setStatus(ok ? "" : "WebXR VR not available in this browser (desktop preview only)"),
-  onEnterXr: () => { orbit.enabled = false; camera.position.set(0, 0, 0); camera.quaternion.identity(); },
-  onExitXr: () => { orbit.enabled = true; camera.position.set(0, 1.6, 0); orbit.update(); },
+  renderer, element: document.createElement("div"), mode: "vrar", controllers: {},
+  referenceSpaceType: "local-floor", frameBufferScaleFactor: 1.0, fixedFoveation: 0.5,
 });
+const SESSION_INIT = { requiredFeatures: ["local-floor"], optionalFeatures: ["bounded-floor", "hand-tracking", "layers"] };
+let xrMode = null; // "immersive-vr" | "immersive-ar" while presenting
+
+async function setupXrButtons() {
+  if (!navigator.xr) return;
+  const [vr, ar] = await Promise.all(
+    ["immersive-vr", "immersive-ar"].map((m) => navigator.xr.isSessionSupported(m).catch(() => false)));
+  ui.enterVr.hidden = !vr;
+  ui.enterAr.hidden = !ar;
+}
+
+async function enterXr(mode) {
+  if (renderer.xr.isPresenting) { renderer.xr.getSession().end(); return; }
+  try {
+    const session = await navigator.xr.requestSession(mode, SESSION_INIT);
+    xrMode = mode;
+    session.addEventListener("end", onXrEnd);
+    await renderer.xr.setSession(session);
+    onXrStart();
+  } catch (err) {
+    console.error(err);
+    setStatus(`Could not start ${mode === "immersive-ar" ? "AR" : "VR"}: ${err.message}`);
+  }
+}
+
+function onXrStart() {
+  const ar = xrMode === "immersive-ar";
+  scene.background = ar ? null : BACKGROUND; // AR: transparent clear shows passthrough
+  grid.visible = !ar;
+  orbit.enabled = false;
+  camera.position.set(0, 0, 0);
+  camera.quaternion.identity();
+  ui.enterVr.textContent = "Exit VR"; ui.enterAr.textContent = "Exit AR";
+  if (!helpShownOnce) { helpShownOnce = true; setHelpVisible(true); } else toast("Y: help");
+}
+
+function onXrEnd() {
+  xrMode = null;
+  scene.background = BACKGROUND;
+  grid.visible = true;
+  orbit.enabled = true;
+  rig.position.set(0, 0, 0);
+  rig.quaternion.identity();
+  camera.position.set(0, 1.6, 0);
+  orbit.update();
+  setHelpVisible(false);
+  ui.enterVr.textContent = "Enter VR"; ui.enterAr.textContent = "Enter AR";
+}
+
+ui.enterVr.onclick = () => enterXr("immersive-vr");
+ui.enterAr.onclick = () => enterXr("immersive-ar");
 
 // --- sequence state -----------------------------------------------------------
 const holder = new THREE.Group(); // up-axis fix + life-size scale + placement
@@ -57,6 +116,7 @@ let seq = null; // { header, frames, packed, mesh }
 let playing = true;
 let time = 0; // seconds into the sequence
 let shownFrame = -1;
+let speed = 1;
 let userScale = 1;
 
 function setStatus(text) {
@@ -75,7 +135,7 @@ async function loadBuffer(buffer, name) {
   const mesh = new SplatMesh({ packedSplats: packed });
   await mesh.initialized;
   holder.add(mesh);
-  seq = { header, frames, packed, mesh };
+  seq = { header, frames, packed, mesh, name };
   placeScene(header);
 
   ui.timeline.max = String(header.numFrames - 1);
@@ -140,16 +200,61 @@ async function loadUrl(url) {
   }
 }
 
-// --- UI -------------------------------------------------------------------------
+// --- actions shared by the page UI, keyboard and XR controllers -----------------
 function updatePlayButton() { ui.play.textContent = playing ? "Pause" : "Play"; }
-ui.play.onclick = () => { playing = !playing; updatePlayButton(); };
+
+function togglePlay() {
+  playing = !playing;
+  updatePlayButton();
+  toast(playing ? "Play" : "Paused");
+}
+
+function restart() {
+  time = 0; playing = true;
+  updatePlayButton();
+  toast("Restart");
+}
+
+function setSpeed(s) {
+  speed = s;
+  ui.speed.value = String(s);
+  toast(`Speed ${s}×`);
+}
+
+function stepSpeed(dir) {
+  const i = SPEEDS.indexOf(speed);
+  setSpeed(SPEEDS[Math.min(SPEEDS.length - 1, Math.max(0, (i < 0 ? 3 : i) + dir))]);
+}
+
+function setSize(s) {
+  userScale = s;
+  ui.size.value = String(s);
+  if (seq) placeScene(seq.header);
+  toast(SIZE_LABELS[s] ?? `${s}×`);
+}
+
+function cycleSize() {
+  setSize(SIZES[(SIZES.indexOf(userScale) + 1) % SIZES.length] ?? 1);
+}
+
+function stepFrame(dir) {
+  if (!seq) return;
+  playing = false;
+  updatePlayButton();
+  const n = seq.header.numFrames;
+  const f = (((shownFrame < 0 ? 0 : shownFrame) + dir) % n + n) % n;
+  time = (f + 0.5) / seq.header.fps;
+}
+
+// --- page UI ----------------------------------------------------------------------
+ui.play.onclick = togglePlay;
 ui.timeline.oninput = () => {
   if (!seq) return;
   playing = false; updatePlayButton();
-  time = Number(ui.timeline.value) / seq.header.fps;
-  showFrame(Number(ui.timeline.value));
+  time = (Number(ui.timeline.value) + 0.5) / seq.header.fps;
 };
-ui.size.oninput = () => { userScale = Number(ui.size.value); if (seq) placeScene(seq.header); };
+ui.speed.oninput = () => setSpeed(Number(ui.speed.value));
+ui.size.oninput = () => setSize(Number(ui.size.value));
 ui.file.onchange = async () => {
   const f = ui.file.files[0];
   if (f) await loadBuffer(await f.arrayBuffer(), f.name);
@@ -160,8 +265,16 @@ addEventListener("drop", async (e) => {
   const f = e.dataTransfer.files[0];
   if (f) await loadBuffer(await f.arrayBuffer(), f.name);
 });
+const KEYS = {
+  Space: togglePlay, KeyR: restart,
+  BracketLeft: () => stepSpeed(-1), BracketRight: () => stepSpeed(1),
+  ArrowLeft: () => stepFrame(-1), ArrowRight: () => stepFrame(1),
+  KeyS: cycleSize, KeyH: () => { ui.help.hidden = !ui.help.hidden; },
+};
 addEventListener("keydown", (e) => {
-  if (e.code === "Space") { playing = !playing; updatePlayButton(); e.preventDefault(); }
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+  const fn = KEYS[e.code];
+  if (fn) { fn(); e.preventDefault(); }
 });
 addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
@@ -169,31 +282,112 @@ addEventListener("resize", () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
-// --- XR controller buttons (A/X = play/pause, B = restart, Y = cycle size) ------
+// --- in-headset help panel + toast ---------------------------------------------------
+const helpPanel = new TextPanel(0.56, 0.5);
+rig.add(helpPanel);
+const toastPanel = new TextPanel(0.24, 0.06);
+toastPanel.position.set(0, -0.16, -0.8);
+camera.add(toastPanel);
+let helpShownOnce = false;
+let toastUntil = 0;
+let helpDrawnAt = 0;
+
+const HELP_LEFT = [
+  ["Stick", "move"],
+  ["Trigger / grip", "up / down"],
+  ["X", "cycle size"],
+  ["Y", "show / hide this help"],
+];
+const HELP_RIGHT = [
+  ["A", "play / pause"],
+  ["B", "restart"],
+  ["Stick ↑ / ↓", "faster / slower"],
+  ["Stick ← / →", "turn"],
+  ["Trigger / grip", "move fast / slow"],
+];
+
+function drawHelp() {
+  const ctx = helpPanel.begin();
+  const W = helpPanel.canvas.width;
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "600 52px system-ui, sans-serif";
+  ctx.fillText(`4DGS player · ${xrMode === "immersive-ar" ? "AR" : "VR"}`, 56, 44);
+  ctx.font = "34px system-ui, sans-serif";
+  ctx.fillStyle = "#9aa0b4";
+  ctx.fillText("LEFT CONTROLLER", 56, 140);
+  let y = drawRows(ctx, HELP_LEFT, 56, 190, 290, 50);
+  ctx.fillStyle = "#9aa0b4";
+  ctx.fillText("RIGHT CONTROLLER", 56, y + 24);
+  y = drawRows(ctx, HELP_RIGHT, 56, y + 74, 290, 50);
+  ctx.fillStyle = "rgba(255,255,255,0.15)";
+  ctx.fillRect(56, y + 18, W - 112, 3);
+  ctx.fillStyle = "#c8f0c8";
+  const n = seq?.header.numFrames ?? 0;
+  const frame = seq ? `frame ${shownFrame + 1}/${n}` : "loading…";
+  ctx.fillText(`${playing ? "▶ playing" : "❚❚ paused"} · ${speed}× · ${SIZE_LABELS[userScale] ?? userScale} · ${frame}`, 56, y + 42);
+  helpPanel.end();
+}
+
+const tmpPos = new THREE.Vector3();
+const tmpQuat = new THREE.Quaternion();
+const tmpEuler = new THREE.Euler();
+
+function setHelpVisible(show) {
+  helpPanel.visible = show;
+  if (!show) return;
+  // Place it front-left of the head, at eye height, facing the viewer; it then stays put
+  // in the room (and moves with thumbstick locomotion, since it lives in the rig).
+  const head = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
+  head.matrixWorld.decompose(tmpPos, tmpQuat, new THREE.Vector3());
+  const yaw = tmpEuler.setFromQuaternion(tmpQuat, "YXZ").y + 0.45;
+  const world = new THREE.Vector3(-Math.sin(yaw) * 0.75, -0.12, -Math.cos(yaw) * 0.75).add(tmpPos);
+  helpPanel.position.copy(rig.worldToLocal(world));
+  helpPanel.quaternion.copy(rig.getWorldQuaternion(new THREE.Quaternion()).invert())
+    .multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)));
+  drawHelp();
+}
+
+function toast(text, force = false) {
+  if (!renderer.xr.isPresenting && !force) return;
+  const ctx = toastPanel.begin();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "600 64px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, toastPanel.canvas.width / 2, toastPanel.canvas.height / 2 + 4);
+  toastPanel.end();
+  toastPanel.visible = true;
+  toastUntil = performance.now() + 1400;
+}
+
+// --- XR controller buttons ------------------------------------------------------------
+// Free inputs (SparkXr already uses both sticks' X/locomotion axes, triggers and grips):
+// A/B/X/Y (buttons 4/5) and the right stick's vertical axis.
 const prevPressed = new Map();
-function pollXrButtons() {
-  const session = renderer.xr.getSession();
-  if (!session) return;
-  for (const src of session.inputSources) {
+let stickArmed = true;
+function pollXrInput() {
+  for (const src of renderer.xr.getSession()?.inputSources ?? []) {
     const gp = src.gamepad;
-    if (!gp) continue;
+    if (!gp || src.hand) continue;
     for (const b of [4, 5]) {
       const key = `${src.handedness}${b}`;
       const pressed = !!gp.buttons[b]?.pressed;
       if (pressed && !prevPressed.get(key)) onXrButton(src.handedness, b);
       prevPressed.set(key, pressed);
     }
+    if (src.handedness === "right") {
+      const y = gp.axes[3] ?? 0;
+      if (stickArmed && Math.abs(y) > 0.75) { stepSpeed(y < 0 ? 1 : -1); stickArmed = false; }
+      else if (Math.abs(y) < 0.3) stickArmed = true;
+    }
   }
 }
-const SIZES = [1, 0.5, 0.25, 2];
+
 function onXrButton(hand, b) {
-  if (b === 4) { playing = !playing; updatePlayButton(); }
-  else if (hand === "right") { time = 0; playing = true; updatePlayButton(); }
-  else if (seq) {
-    userScale = SIZES[(SIZES.indexOf(userScale) + 1) % SIZES.length] ?? 1;
-    ui.size.value = String(userScale);
-    placeScene(seq.header);
-  }
+  if (hand === "right") (b === 4 ? togglePlay : restart)();
+  else if (b === 4) cycleSize();
+  else setHelpVisible(!helpPanel.visible);
 }
 
 // --- loop ---------------------------------------------------------------------
@@ -202,18 +396,24 @@ timer.connect(document);
 renderer.setAnimationLoop((timestamp) => {
   timer.update(timestamp);
   const dt = Math.min(timer.getDelta(), 0.1);
+  const now = performance.now();
   if (renderer.xr.isPresenting) {
     xr.updateControllers(camera);
-    pollXrButtons();
+    pollXrInput();
   }
   if (seq) {
-    if (playing) time += dt * Number(ui.speed.value);
+    if (playing) time += dt * speed;
     const n = seq.header.numFrames;
     const f = Math.floor(time * seq.header.fps) % n;
     showFrame(f < 0 ? f + n : f);
   }
+  if (helpPanel.visible && now - helpDrawnAt > 250) { drawHelp(); helpDrawnAt = now; }
+  if (toastPanel.visible && now > toastUntil) toastPanel.visible = false;
   renderer.render(scene, camera);
 });
 
+setupXrButtons();
+// Dev-only hooks so the in-headset panels can be checked on a desktop without a headset.
+if (import.meta.env.DEV) window.__viewer = { setHelpVisible, toast, onXrButton, stepSpeed, camera, orbit, helpPanel, rig };
 const params = new URLSearchParams(location.search);
 loadUrl(params.get("url") ?? DEFAULT_URL);

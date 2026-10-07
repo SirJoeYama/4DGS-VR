@@ -51,11 +51,24 @@ cd ../viewer && npm run dev
 Open http://localhost:5180 (loads `scenes/jumpingjacks.4dgsv`; others via `?url=scenes/x.4dgsv`,
 Open…, or drag & drop). jumpingjacks trains in ~8 min on an RTX 4060 Ti (36 dB PSNR).
 
-**On the Quest:** run `npm run dev:quest` (HTTPS on the LAN with a self-signed cert), open
-`https://<pc-ip>:5180` in the Quest browser, accept the certificate warning, press **Enter VR**.
-Alternatively, with USB: `adb reverse tcp:5180 tcp:5180` and open `http://localhost:5180`.
+**On the Quest:** use the live site, or run `npm run dev:quest` (HTTPS on the LAN with a
+self-signed cert), open `https://<pc-ip>:5180` in the Quest browser and accept the certificate
+warning. Press **Enter VR** (virtual room with a floor grid) or **Enter AR** (passthrough: the
+scene stands on your real floor). Alternatively, with USB: `adb reverse tcp:5180 tcp:5180` and
+open `http://localhost:5180`.
 
-VR controls: thumbsticks move/turn, A/X play/pause, B restart, Y cycle size (life, ½, ¼, 2×).
+Headset controls (press **Y** for the in-headset help card, shown automatically the first time):
+
+| Left controller | | Right controller | |
+|---|---|---|---|
+| Stick | move | Stick ← / → | turn |
+| Trigger / grip | up / down | Stick ↑ / ↓ | faster / slower (0.1×–3×) |
+| X | cycle size (¼, ½, life, 2×) | A | play / pause |
+| Y | help card | B | restart |
+| | | Trigger / grip | move fast / slow |
+
+Desktop: drag to orbit, Space play/pause, ← / → step a frame, [ / ] speed, S size, R restart,
+H hide the hint text.
 
 ## From a single video (L4GM)
 

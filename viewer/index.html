@@ -21,6 +21,8 @@
       border-radius: 6px; padding: 4px 10px; cursor: pointer;
     }
     label.file input { display: none; }
+    button.xr { background: #3b4bd8; border-color: #5566ee; font-weight: 600; }
+    [hidden] { display: none !important; }
     #frame { font-variant-numeric: tabular-nums; min-width: 6ch; text-align: right; }
     #status {
       position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
@@ -33,21 +35,17 @@
 </head>
 <body>
   <div id="status">Loading…</div>
-  <div id="help">Drag to orbit · Space play/pause · Drop a .4dgsv file<br />
-    VR: thumbsticks move/turn · A/X play/pause · B restart · Y cycle size</div>
+  <div id="help">Drag to orbit · Space play/pause · ←/→ step frame · [ / ] speed · S size · R restart · H hide<br />
+    Drop a .4dgsv file to open it · In VR / AR press Y for the controller help</div>
   <div id="panel">
     <button id="play" class="needs-seq">Pause</button>
     <input id="timeline" class="needs-seq" type="range" min="0" max="0" value="0" />
     <span id="frame">–</span>
-    <select id="speed" title="Playback speed">
-      <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
-      <option value="1" selected>1×</option><option value="2">2×</option>
-    </select>
-    <select id="size" title="Scene size">
-      <option value="0.25">¼ size</option><option value="0.5">½ size</option>
-      <option value="1" selected>Life size</option><option value="2">2× size</option>
-    </select>
+    <select id="speed" title="Playback speed"></select>
+    <select id="size" title="Scene size"></select>
     <label class="file">Open…<input id="file" type="file" accept=".4dgsv" /></label>
+    <button id="enter-vr" class="xr" hidden>Enter VR</button>
+    <button id="enter-ar" class="xr" hidden>Enter AR</button>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>
