@@ -16,11 +16,12 @@
     }
     #panel:not([data-loaded]) .needs-seq { opacity: 0.4; pointer-events: none; }
     #timeline { width: min(40vw, 360px); }
-    button, select, label.file {
+    button, select, label.file, a.btn-link {
       font: inherit; color: inherit; background: #2a2a38; border: 1px solid #3a3a4c;
       border-radius: 6px; padding: 4px 10px; cursor: pointer;
     }
     label.file input { display: none; }
+    a.btn-link { text-decoration: none; }
     button.xr { background: #3b4bd8; border-color: #5566ee; font-weight: 600; }
     [hidden] { display: none !important; }
     #frame { font-variant-numeric: tabular-nums; min-width: 6ch; text-align: right; }
@@ -44,6 +45,7 @@
     <select id="speed" title="Playback speed"></select>
     <select id="size" title="Scene size"></select>
     <label class="file">Open…<input id="file" type="file" accept=".4dgsv" /></label>
+    <a class="btn-link" href="create.html" title="Turn a video into a 4D scene">Create…</a>
     <button id="enter-vr" class="xr" hidden>Enter VR</button>
     <button id="enter-ar" class="xr" hidden>Enter AR</button>
   </div>

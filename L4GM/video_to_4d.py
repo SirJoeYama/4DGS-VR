@@ -44,10 +44,23 @@ clip_path = os.path.join(work, "input", f"{name}.mp4")
 # ---------------------------------------------------------------- 1. read + trim
 meta = iio.immeta(args.video)
 fps = float(meta.get("fps") or 30)
-frames = iio.imread(args.video)  # [T, H, W, 3]
+# Stream frames and keep only the trimmed range, downscaled: long 4K phone clips would
+# otherwise not fit in memory.
+MAX_SIDE = 1280
 first = int(args.start * fps)
-last = len(frames) if args.seconds <= 0 else min(len(frames), first + int(round(args.seconds * fps)))
-frames = frames[first:last]
+last = None if args.seconds <= 0 else first + int(round(args.seconds * fps))
+frames = []
+for i, fr in enumerate(iio.imiter(args.video)):
+    if i < first:
+        continue
+    if last is not None and i >= last:
+        break
+    h, w = fr.shape[:2]
+    if max(h, w) > MAX_SIDE:
+        k = MAX_SIDE / max(h, w)
+        fr = cv2.resize(fr, (round(w * k), round(h * k)), interpolation=cv2.INTER_AREA)
+    frames.append(fr[..., :3])
+frames = np.stack(frames) if frames else np.zeros((0, 1, 1, 3), np.uint8)
 if len(frames) < 2:
     sys.exit("Clip is too short after trimming")
 print(f"[1/5] {len(frames)} frames @ {fps:.1f} fps from {args.video}")
@@ -69,6 +82,7 @@ else:
             x = ((x.permute(2, 0, 1)[None].float() / 255 - mean) / std).half()
             a = net(x)[-1].sigmoid()[0, 0].float().cpu().numpy()
             alphas.append(cv2.resize(a, (fr.shape[1], fr.shape[0]), interpolation=cv2.INTER_LINEAR))
+            print(f"matte {len(alphas)}/{len(frames)}", flush=True)
     alphas = np.stack(alphas)
     del net
     torch.cuda.empty_cache()

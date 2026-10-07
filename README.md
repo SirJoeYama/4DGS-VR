@@ -70,6 +70,24 @@ Headset controls (press **Y** for the in-headset help card, shown automatically 
 Desktop: drag to orbit, Space play/pause, ← / → step a frame, [ / ] speed, S size, R restart,
 H hide the hint text.
 
+## Create page (video → 4D in the browser)
+
+Start the generator (runs on this PC's GPU, listens on `127.0.0.1:8766` only) and the viewer:
+
+```bash
+cd viewer
+npm run generator
+npm run dev
+```
+
+Open http://localhost:5180/create.html (or **Create…** in the viewer): drop a video, pick the
+start and length (1–10 s) on the preview, name it, and press **Generate 4D scene**. Jobs queue up
+and run one at a time with live progress, a preview of the background-removed clip L4GM sees, and
+an **Open in viewer** link when done; finished scenes are listed below. The page on GitHub Pages
+also works from this PC in Chrome while the generator is running (it allows private-network
+requests). Results are written to `viewer/public/scenes/`, so the dev server (and the Quest via
+`npm run dev:quest`) can open them directly.
+
 ## From a single video (L4GM)
 
 Setup once (~8 GB of weights):

@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "dev:quest": "vite --mode quest"
+    "dev:quest": "vite --mode quest",
+    "generator": "cd ../L4GM && .venv\\Scripts\\python.exe -m uvicorn server:app --host 127.0.0.1 --port 8766"
   },
   "dependencies": {
     "@sparkjsdev/spark": "2.3.1",

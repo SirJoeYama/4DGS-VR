@@ -7,5 +7,8 @@ export default defineConfig(({ command, mode, isPreview }) => ({
   base: command === "build" || isPreview ? "/4DGS-VR/" : "/",
   plugins: mode === "quest" ? [basicSsl()] : [],
   server: { host: mode === "quest" ? true : "localhost", port: 5180 },
-  build: { target: "es2022" },
+  build: {
+    target: "es2022",
+    rolldownOptions: { input: { main: "index.html", create: "create.html" } },
+  },
 }));

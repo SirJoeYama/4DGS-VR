@@ -27,3 +27,7 @@ transformers==4.44.2
 # BiRefNet background removal (remote code)
 timm
 kornia
+# generator server (server.py)
+fastapi
+uvicorn
+python-multipart

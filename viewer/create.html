@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>4DGS Creator</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101014; --card: #181820; --line: #2c2c3a; --text: #e8e8ee; --muted: #9aa0b4;
+      --accent: #5566ee; --accent-2: #3b4bd8; --ok: #6fd18a; --warn: #ffd27a; --err: #ff7a7a;
+      font: 14px/1.5 system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    main { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    h1 { font-size: 22px; margin: 0; }
+    h2 { font-size: 15px; margin: 0 0 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    a { color: #9fb0ff; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 18px; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 999px; background: #22222c; font-size: 13px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .pill.on .dot { background: var(--ok); } .pill.off .dot { background: var(--err); }
+    .offline { margin-top: 10px; color: var(--muted); }
+    code, pre { background: #0b0b10; border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; font-size: 12.5px; }
+    pre { padding: 10px 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    #drop {
+      border: 2px dashed var(--line); border-radius: 10px; padding: 32px 16px; text-align: center;
+      color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s;
+    }
+    #drop.over { border-color: var(--accent); background: #1c1c2a; }
+    #drop strong { color: var(--text); }
+    #editor[hidden], [hidden] { display: none !important; }
+    #editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+    @media (max-width: 720px) { #editor { grid-template-columns: 1fr; } }
+    video { width: 100%; max-height: 360px; background: #000; border-radius: 8px; display: block; }
+    label.row { display: grid; gap: 4px; margin-bottom: 12px; }
+    label.row > span { color: var(--muted); font-size: 13px; }
+    .inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    input[type=text], input[type=number] {
+      font: inherit; color: var(--text); background: #0f0f15; border: 1px solid var(--line);
+      border-radius: 6px; padding: 6px 8px; width: 100%;
+    }
+    input[type=number] { width: 7em; }
+    input[type=range] { width: 100%; }
+    label.check { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
+    label.check small { color: var(--muted); display: block; }
+    button, .btn {
+      font: inherit; color: var(--text); background: #2a2a38; border: 1px solid #3a3a4c; border-radius: 6px;
+      padding: 6px 12px; cursor: pointer; text-decoration: none; display: inline-block;
+    }
+    button.primary, .btn.primary { background: var(--accent-2); border-color: var(--accent); font-weight: 600; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .tips { color: var(--muted); font-size: 13px; margin: 12px 0 0; padding-left: 18px; }
+    .job { border-top: 1px solid var(--line); padding: 14px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; }
+    .job:first-child { border-top: 0; padding-top: 0; }
+    .job .title { font-weight: 600; overflow-wrap: anywhere; }
+    .job .meta { color: var(--muted); font-size: 13px; }
+    .job .actions { display: flex; gap: 8px; align-items: start; flex-wrap: wrap; justify-content: flex-end; }
+    .bar { grid-column: 1 / -1; height: 6px; background: #0b0b10; border-radius: 3px; overflow: hidden; }
+    .bar > div { height: 100%; background: var(--accent); transition: width .4s; }
+    .job.done .bar > div { background: var(--ok); } .job.error .bar > div { background: var(--err); }
+    .job .seen { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 13px; }
+    .job .seen video { width: 128px; height: 128px; border-radius: 6px; }
+    .status-done { color: var(--ok); } .status-error { color: var(--err); } .status-running { color: var(--warn); }
+    .empty { color: var(--muted); }
+    ul.scenes { list-style: none; margin: 0; padding: 0; }
+    ul.scenes li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+    ul.scenes li:first-child { border-top: 0; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Create a 4D scene from a video</h1>
+    <div class="inline">
+      <span id="backend" class="pill"><span class="dot"></span><span id="backend-text">Checking generator…</span></span>
+      <a class="btn" href="./">Viewer</a>
+    </div>
+  </header>
+  <div id="offline" class="offline" hidden>
+    The generator runs on your PC's GPU. Start it, then this page connects automatically:
+    <pre>cd C:/dev/4DGS-VR/viewer
+npm run generator</pre>
+  </div>
+
+  <section class="card">
+    <h2>1 · Video</h2>
+    <div id="drop" tabindex="0" role="button">
+      <strong>Drop a video here</strong> or click to choose one<br />
+      <small>MP4 / MOV / WebM · one subject, filmed from one side</small>
+      <input id="file" type="file" accept="video/*" hidden />
+    </div>
+
+    <div id="editor" hidden>
+      <div>
+        <video id="preview" controls playsinline muted></video>
+        <ul class="tips">
+          <li>One subject (person, animal, object) that stays fully in frame.</li>
+          <li>Mostly still camera; 2–5 seconds works best.</li>
+          <li>The back is invented by AI from the first frame of the clip.</li>
+        </ul>
+      </div>
+      <div>
+        <label class="row"><span>Name</span><input id="name" type="text" maxlength="48" /></label>
+        <label class="row"><span>Start (seconds)</span>
+          <span class="inline"><input id="start" type="number" min="0" step="0.1" value="0" />
+          <button id="from-playhead" type="button">Use playhead</button></span>
+        </label>
+        <label class="row"><span>Length: <b id="len-label">3.0 s</b> <span id="frames-label"></span></span>
+          <input id="seconds" type="range" min="1" max="10" step="0.5" value="3" />
+        </label>
+        <label class="check"><input id="interp" type="checkbox" />
+          <span>Smoother motion<small>3× the frames and file size</small></span></label>
+        <label class="check"><input id="nomatte" type="checkbox" />
+          <span>Background is already plain white<small>skip automatic background removal</small></span></label>
+        <div class="inline" style="margin-top: 14px">
+          <button id="generate" class="primary" type="button" disabled>Generate 4D scene</button>
+          <button id="clear" type="button">Choose another video</button>
+        </div>
+        <p id="form-msg" class="empty"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2 · Jobs</h2>
+    <div id="jobs"><p class="empty">No jobs yet.</p></div>
+  </section>
+
+  <section class="card">
+    <h2>3 · Your scenes</h2>
+    <ul id="scenes" class="scenes"><li class="empty">—</li></ul>
+  </section>
+</main>
+<script type="module" src="/src/create.js"></script>
+</body>
+</html>
