@@ -1,6 +1,7 @@
 // Create page: upload a video to the local generator server (L4GM/server.py) and follow the job.
 const params = new URLSearchParams(location.search);
-const API = (params.get("api") ?? "http://127.0.0.1:8766").replace(/\/$/, "");
+// The dev server relays /api to the generator; the GitHub Pages copy calls it directly.
+const API = (params.get("api") ?? (import.meta.env.DEV ? "/api" : "http://127.0.0.1:8766")).replace(/\/$/, "");
 
 const $ = (id) => document.getElementById(id);
 const el = {
