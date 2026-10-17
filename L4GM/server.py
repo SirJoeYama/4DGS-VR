@@ -18,7 +18,7 @@ from collections import deque
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCENES = os.path.normpath(os.path.join(HERE, "..", "viewer", "public", "scenes"))
@@ -27,14 +27,27 @@ os.makedirs(SCENES, exist_ok=True)
 os.makedirs(UPLOADS, exist_ok=True)
 
 app = FastAPI(title="4DGS generator")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+# Only the viewer (Vite dev/preview on this PC or the LAN, or the GitHub Pages copy) may call
+# this server from a browser; any other site the user has open must not queue GPU jobs.
+ALLOWED_ORIGIN = re.compile(
+    r"^(https?://(localhost|127\.0\.0\.1|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+"
+    r"|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?|https://sirjoeyama\.github\.io)$")
+VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
+app.add_middleware(CORSMiddleware, allow_origin_regex=ALLOWED_ORIGIN.pattern,
+                   allow_methods=["*"], allow_headers=["*"])
 
 
 @app.middleware("http")
-async def private_network_access(request, call_next):
-    # Lets the HTTPS GitHub Pages copy of the Create page reach this localhost server in Chrome.
+async def origin_guard(request, call_next):
+    # CORS only hides responses; a plain form POST from another site would still be executed,
+    # so refuse foreign origins outright. Requests without an Origin (curl, scripts) are allowed.
+    origin = request.headers.get("origin")
+    if origin and not ALLOWED_ORIGIN.match(origin):
+        return JSONResponse({"detail": "Origin not allowed"}, status_code=403)
     response = await call_next(request)
-    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    if origin:
+        # Lets the HTTPS GitHub Pages copy of the Create page reach this localhost server in Chrome.
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
     return response
 
 
@@ -173,7 +186,9 @@ async def create_job(video: UploadFile = File(...), name: str = Form(""), start:
     if not (0 < seconds <= 20):
         raise HTTPException(400, "Clip length must be between 0 and 20 seconds")
     job_id = uuid.uuid4().hex[:10]
-    ext = os.path.splitext(video.filename or "")[1].lower() or ".mp4"
+    ext = os.path.splitext(video.filename or "")[1].lower()
+    if ext not in VIDEO_EXTS:
+        ext = ".mp4"  # ffmpeg/imageio sniff the container, the extension is only a hint
     path = os.path.join(UPLOADS, f"{job_id}{ext}")
     with open(path, "wb") as f:
         shutil.copyfileobj(video.file, f, length=4 << 20)

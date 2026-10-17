@@ -124,16 +124,24 @@ function setStatus(text) {
   ui.status.hidden = !text;
 }
 
-async function loadBuffer(buffer, name) {
+// Bumped by every new load; a load that finds it changed was superseded and drops its result.
+let loadId = 0;
+
+async function loadBuffer(buffer, name, id = ++loadId) {
   setStatus(`Decoding ${name}…`);
   const { header } = parseHeader(buffer);
   const maxSplats = utils.computeMaxSplats(header.numSplats);
-  const { frames } = await decodeFrames(buffer, maxSplats, (d, t) => setStatus(`Decoding ${name}: frame ${d}/${t}`));
+  const { frames } = await decodeFrames(buffer, maxSplats, (d, t) => {
+    // Throwing stops decoding a superseded file; its caller ignores errors from stale loads.
+    if (id !== loadId) throw new Error("superseded");
+    setStatus(`Decoding ${name}: frame ${d}/${t}`);
+  });
 
-  if (seq) { holder.remove(seq.mesh); seq.mesh.dispose(); seq.packed.dispose?.(); }
   const packed = new PackedSplats({ packedArray: frames[0].slice(), numSplats: header.numSplats, maxSplats });
   const mesh = new SplatMesh({ packedSplats: packed });
   await mesh.initialized;
+  if (id !== loadId) { mesh.dispose(); packed.dispose?.(); return; }
+  if (seq) { holder.remove(seq.mesh); seq.mesh.dispose(); seq.packed.dispose?.(); }
   holder.add(mesh);
   seq = { header, frames, packed, mesh, name };
   placeScene(header);
@@ -176,27 +184,53 @@ function showFrame(i) {
 }
 
 async function loadUrl(url) {
+  const id = ++loadId;
   try {
     setStatus(`Downloading ${url}…`);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    const total = Number(res.headers.get("content-length")) || 0;
+    // content-length is the encoded size, so only trust it for uncompressed responses.
+    const total = res.headers.get("content-encoding") ? 0 : Number(res.headers.get("content-length")) || 0;
     const reader = res.body.getReader();
+    // Write straight into one buffer of the announced size, so the Quest never holds the file
+    // twice (chunks + joined copy); fall back to chunks if the size is unknown or wrong.
+    let buf = total ? new Uint8Array(total) : null;
     const chunks = [];
     let got = 0;
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      chunks.push(value); got += value.length;
+      if (id !== loadId) { reader.cancel(); return; }
+      if (buf && got + value.length <= buf.length) buf.set(value, got);
+      else {
+        if (buf) { chunks.push(buf.subarray(0, got)); buf = null; }
+        chunks.push(value);
+      }
+      got += value.length;
       setStatus(`Downloading ${url}: ${(got / 1e6).toFixed(1)}${total ? ` / ${(total / 1e6).toFixed(1)}` : ""} MB`);
     }
-    const buf = new Uint8Array(got);
-    let o = 0;
-    for (const c of chunks) { buf.set(c, o); o += c.length; }
-    await loadBuffer(buf.buffer, url.split("/").pop());
+    if (!buf) {
+      buf = new Uint8Array(got);
+      let o = 0;
+      for (const c of chunks) { buf.set(c, o); o += c.length; }
+    }
+    await loadBuffer(buf.buffer.byteLength === got ? buf.buffer : buf.buffer.slice(0, got), url.split("/").pop(), id);
   } catch (err) {
+    if (id !== loadId) return; // superseded by a newer load
     console.error(err);
     setStatus(`Could not load ${url}: ${err.message}. Export one with export_vr.py or open a .4dgsv file.`);
+  }
+}
+
+async function loadFile(file) {
+  const id = ++loadId;
+  try {
+    setStatus(`Reading ${file.name}…`);
+    await loadBuffer(await file.arrayBuffer(), file.name, id);
+  } catch (err) {
+    if (id !== loadId) return;
+    console.error(err);
+    setStatus(`Could not open ${file.name}: ${err.message}`);
   }
 }
 
@@ -255,15 +289,16 @@ ui.timeline.oninput = () => {
 };
 ui.speed.oninput = () => setSpeed(Number(ui.speed.value));
 ui.size.oninput = () => setSize(Number(ui.size.value));
-ui.file.onchange = async () => {
+ui.file.onchange = () => {
   const f = ui.file.files[0];
-  if (f) await loadBuffer(await f.arrayBuffer(), f.name);
+  if (f) loadFile(f);
+  ui.file.value = ""; // so picking the same file again still fires change
 };
 addEventListener("dragover", (e) => e.preventDefault());
-addEventListener("drop", async (e) => {
+addEventListener("drop", (e) => {
   e.preventDefault();
   const f = e.dataTransfer.files[0];
-  if (f) await loadBuffer(await f.arrayBuffer(), f.name);
+  if (f) loadFile(f);
 });
 const KEYS = {
   Space: togglePlay, KeyR: restart,
